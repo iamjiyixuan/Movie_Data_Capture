@@ -29,7 +29,7 @@ def getSupportedSources():
 class Scraping:
     """
     """
-    adult_full_sources = []
+    adult_full_sources = ['javbus', 'airav', 'javdb']
 
     general_full_sources = ['tmdb', 'imdb']
 

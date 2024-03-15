@@ -488,15 +488,24 @@ def add_mark(poster_path, thumb_path, cn_sub, leak, uncensored, hack, _4k, iso) 
     mark_type = ''
     if cn_sub:
         mark_type += ',字幕'
+    if leak:
+        mark_type += ',流出'
+    if uncensored:
+        mark_type += ',无码'
+    if hack:
+        mark_type += ',破解'
     if _4k:
         mark_type += ',4k'
     if iso:
         mark_type += ',iso'
+    
     if mark_type == '':
         return
+    
     add_mark_thread(thumb_path, cn_sub, leak, uncensored, hack, _4k, iso)
     add_mark_thread(poster_path, cn_sub, leak, uncensored, hack, _4k, iso)
-    print('[+]Add Mark:         ' + mark_type.strip(','))
+    
+    print('[+] Add Mark:         ' + mark_type.strip(','))
 
 
 def add_mark_thread(pic_path, cn_sub, leak, uncensored, hack, _4k, iso):
@@ -530,6 +539,12 @@ def add_to_pic(pic_path, img_pic, size, count, mode):
     pngpath = ''
     if mode == 1:
         pngpath = "Img/SUB.png"
+    elif mode == 2:
+        pngpath = "Img/LEAK.png"
+    elif mode == 3:
+        pngpath = "Img/UNCENSORED.png"
+    elif mode == 4:
+        pngpath = "Img/HACK.png"
     elif mode == 5:
         pngpath = "Img/4K.png"
     elif mode == 6:
@@ -800,6 +815,7 @@ def core_main(movie_path, number_th, oCC, specified_source=None, specified_url=N
     # =======================================================================初始化所需变量
     multi_part = False
     part = ''
+    leak = False
     leak_word = ''
     c_word = ''
     cn_sub = False
@@ -828,7 +844,7 @@ def core_main(movie_path, number_th, oCC, specified_source=None, specified_url=N
         number = json_data["number"]
     imagecut = json_data.get('imagecut')
     tag = json_data.get('tag')
-    # =======================================================================判断-C,-CD后缀
+    # =======================================================================判断 -C, -CD 后缀
     if re.search('[-_]CD\d+', movie_path, re.IGNORECASE):
         multi_part = True
         part = re.findall('[-_]CD\d+', movie_path, re.IGNORECASE)[0].upper()
@@ -840,14 +856,26 @@ def core_main(movie_path, number_th, oCC, specified_source=None, specified_url=N
     if re.search(r'[-_]UC(\.\w+$|-\w+)', movie_path,
                  re.I):
         cn_sub = True
-        hack_word = '-UC'  #
         hack = True
+        hack_word = '-UC'
         
     if re.search(r'[-_]U(\.\w+$|-\w+)', movie_path,
-                 re.I):#
+                 re.I):
         hack = True
         hack_word = '-U'
-    uncensored = int(unce) if isinstance(unce, bool) else int(is_uncensored(number))
+    
+    if re.search(r'[-_]leak(\.\w+$|-\w+)', movie_path,
+                 re.I):
+        leak = True
+        leak_word = '-leak' # ?? 什么作用
+    
+    if re.search(r'[-_]hack(\.\w+$|-\w+)', movie_path,
+                 re.I):
+        hack = True
+        hack_word = '-hack' # ?? 什么作用
+    
+    # uncensored = int(unce) if isinstance(unce, bool) else int(is_uncensored(number))
+    uncensored = True if is_uncensored(number) else 0
 
     if '4k'.upper() in str(movie_path).upper() or '4k' in movie_path:
         _4k = True
