@@ -3,7 +3,7 @@
 import re
 from urllib.parse import urljoin
 from lxml import etree
-from .httprequest import request_session
+from .httprequest import get_html_by_uc
 from .parser import Parser
 
 
@@ -64,40 +64,67 @@ class Javdb(Parser):
             self.dbsite = 'javdb'
 
     def search(self, number: str):
+        print(f"[DEBUG] search() ... {number}")
         self.number = number
-        self.session = request_session(cookies=self.cookies, proxies=self.proxies, verify=self.verify)
+        print("[DEBUG] Creating UC driver...")
+        self.driver = get_html_by_uc(cookies=self.cookies)
+        print(f"[DEBUG] Driver created: {self.driver}")
         if self.specifiedUrl:
             self.detailurl = self.specifiedUrl
         else:
             self.detailurl = self.queryNumberUrl(number)
-        self.deatilpage = self.session.get(self.detailurl).text
+        self.driver.get(self.detailurl)
+        import time
+        time.sleep(3)
+        self.deatilpage = self.driver.page_source
         if '此內容需要登入才能查看或操作' in self.deatilpage or '需要VIP權限才能訪問此內容' in self.deatilpage:
             self.noauth = True
             self.imagecut = 0
             result = self.dictformat(self.querytree)
         else:
             htmltree = etree.fromstring(self.deatilpage, etree.HTMLParser())
+            print(f"[DEBUG] Detail page title: {self.driver.title}")
+            # Test getNum directly
+            try:
+                test_num = self.getNum(htmltree)
+                print(f"[DEBUG] getNum result: {test_num}")
+            except Exception as e:
+                print(f"[DEBUG] getNum error: {e}")
+            # Check XPath on detail page
+            test_part1 = htmltree.xpath('//strong[contains(text(),"番號")]/../span/text()')
+            test_part2 = htmltree.xpath('//strong[contains(text(),"番號")]/../span/a/text()')
+            print(f"[DEBUG] Detail expr_number (span): {test_part1}")
+            print(f"[DEBUG] Detail expr_number2 (span/a): {test_part2}")
             result = self.dictformat(htmltree)
+            print(f"[DEBUG] dictformat result: {result[:200] if result else 'None'}")
+        self.driver.quit()
         return result
 
     def queryNumberUrl(self, number):
+        print(f"[DEBUG] queryNumberUrl() ... {number}")
         javdb_url = 'https://' + self.dbsite + '.com/search?q=' + number + '&f=all'
         try:
-            resp = self.session.get(javdb_url)
+            print(f"[DEBUG] Navigating to: {javdb_url}")
+            self.driver.get(javdb_url)
+            import time
+            time.sleep(3)
+            print(f"[DEBUG] Page source length: {len(self.driver.page_source)}")
+            # Check if movie-list exists
+            tree = etree.fromstring(self.driver.page_source, etree.HTMLParser())
+            urls = tree.xpath('//*[contains(@class,"movie-list")]/div/a/@href')
+            print(f"[DEBUG] Found {len(urls)} movie items")
+            ids = tree.xpath('//*[contains(@class,"movie-list")]/div/a/div[contains(@class, "video-title")]/strong/text()')
+            print(f"[DEBUG] Movie IDs found: {ids}")
+            print(f"[DEBUG] Raw URLs: {urls}")
         except Exception as e:
+            print(f"[DEBUG] Exception in queryNumberUrl: {e}")
             #print(e)
             raise Exception(f'[!] {self.number}: page not fond in javdb')
 
-        self.querytree = etree.fromstring(resp.text, etree.HTMLParser()) 
-        # javdb sometime returns multiple results,
-        # and the first elememt maybe not the one we are looking for
-        # iterate all candidates and find the match one
-        urls = self.getTreeAll(self.querytree, '//*[contains(@class,"movie-list")]/div/a/@href')
-        # 记录一下欧美的ids  ['Blacked','Blacked']
         if re.search(r'[a-zA-Z]+\.\d{2}\.\d{2}\.\d{2}', number):
             correct_url = urls[0]
         else:
-            ids = self.getTreeAll(self.querytree, '//*[contains(@class,"movie-list")]/div/a/div[contains(@class, "video-title")]/strong/text()')
+            # ids = self.getTreeAll(self.querytree, '//*[contains(@class,"movie-list")]/div/a/div[contains(@class, "video-title")]/strong/text()')
             try:
                 self.queryid = ids.index(number)
                 correct_url = urls[self.queryid]
@@ -106,7 +133,8 @@ class Javdb(Parser):
                 if ids[0].upper() != number.upper():
                     raise ValueError("number not found in javdb")
                 correct_url = urls[0]
-        return urljoin(resp.url, correct_url)
+        print(f"[DEBUG] correct_url: {correct_url}")
+        return urljoin('https://javdb.com', correct_url)
 
     def getNum(self, htmltree):
         if self.noauth:
@@ -213,8 +241,13 @@ class Javdb(Parser):
         except:
             return ''
 
-    def getaphoto(self, url, session):
-        html_page = session.get(url).text
+    def getaphoto(self, url):
+        driver = get_html_by_uc()
+        driver.get(url)
+        import time
+        time.sleep(2)
+        html_page = driver.page_source
+        driver.quit()
         img_url = re.findall(r'<span class\=\"avatar\" style\=\"background\-image\: url\((.*?)\)', html_page)
         return img_url[0] if img_url else ''
 
@@ -233,7 +266,7 @@ class Javdb(Parser):
             # pic_url = f"https://c1.jdbstatic.com/avatars/{actor_id[:2].lower()}/{actor_id}.jpg"
             # if not self.session.head(pic_url).ok:
             try:
-                pic_url = self.getaphoto(urljoin('https://javdb.com', i.attrib['href']), self.session)
+                pic_url = self.getaphoto(urljoin('https://javdb.com', i.attrib['href']))
                 if len(pic_url):
                     actor_photo[i.text] = pic_url
             except:

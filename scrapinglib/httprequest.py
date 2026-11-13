@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 
 import mechanicalsoup
+import time
 import requests
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
@@ -191,3 +192,49 @@ def get_html_by_scraper(url: str = None, cookies: dict = None, ua: str = None, r
     except Exception as e:
         print(f"[-]get_html_by_scraper() failed. {e}")
     return None
+
+
+def get_html_by_uc(url=None, cookies=None, ua=None, return_type=None, encoding=None, proxies=None, timeout=G_DEFAULT_TIMEOUT, verify=None):
+    """
+    使用 selenium + webdriver-manager 创建真正的 Chrome 浏览器实例绕过 Cloudflare
+    如果 url 为 None，返回 driver 实例供复用；否则直接获取页面
+    """
+    from selenium import webdriver
+    from selenium.webdriver.chrome.service import Service
+    from selenium.webdriver.chrome.options import Options
+    from webdriver_manager.chrome import ChromeDriverManager
+
+    print("[DEBUG] UC: Setting up Chrome options...")
+    options = Options()
+    options.add_argument('--headless=new')
+    options.add_argument('--disable-gpu')
+    options.add_argument('--no-sandbox')
+    options.add_argument('--disable-dev-shm-usage')
+    options.add_argument('--disable-blink-features=AutomationControlled')
+    options.add_experimental_option('excludeSwitches', ['enable-automation'])
+    options.add_experimental_option('useAutomationExtension', False)
+    if ua:
+        options.add_argument(f'--user-agent={ua}')
+
+    print("[DEBUG] UC: Installing and creating Chrome driver...")
+    service = Service(ChromeDriverManager().install())
+    driver = webdriver.Chrome(service=service, options=options)
+    print("[DEBUG] UC: Driver created successfully")
+
+    if isinstance(cookies, dict) and len(cookies):
+        print("[DEBUG] UC: Setting cookies...")
+        driver.get('https://javdb.com')
+        for k, v in cookies.items():
+            driver.add_cookie({'name': k, 'value': v, 'domain': '.javdb.com'})
+
+    if isinstance(url, str) and len(url):
+        print(f"[DEBUG] UC: Getting URL: {url}")
+        driver.get(url)
+        time.sleep(5)
+        page_source = driver.page_source
+        driver.quit()
+        if return_type == "content":
+            return page_source.encode('utf-8')
+        return page_source
+    else:
+        return driver
